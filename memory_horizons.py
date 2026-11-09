@@ -79,3 +79,77 @@ for r in results:
     dF=np.max(np.abs(r["fm"]-r["fb"]))
     print("{:8.0f} {:8.1f} {:12.4f} {:12.4f} {:10.3f} {:12.3f}".format(
         r["Tmax"],(r["Tmax"]-mm.Tn)/60.,dP,dF,r["Nm"][-1]/r["Nb"][-1],r["m"].max()))
+
+### focus horizons: T=280 (16 segments) and T=580 (36 segments)
+focus_segments=[16,36]
+etas=[0.25,0.75,0.95]
+taus=[0.25,0.75,0.95] # zeta_m read as the memory timescale tau_m
+
+def simulate_horizon(total_segments,eta,tau_m=mm.tau_m_memory,lh=mm.lh):
+    """ simulate one horizon with its own eta, tau_m and treatment strength lh """
+    mm.total_segments=total_segments
+    mm.Tmax=total_segments*mm.segment_interval+mm.Tn
+    mm.lh=lh
+    return mm.simulate(eta,tau_m)
+
+def rates(m,eta):
+    """ K_PD and K_DP along a memory trajectory m(t) """
+    return mm.mig_spont*(1+eta*m),mm.mig_spont*(1-eta*m)
+
+for s in focus_segments:
+    Tmax=s*mm.segment_interval+mm.Tn
+
+    # 1) K_PD and K_DP: top row for several eta, bottom row for several tau_m
+    fig,ax=plt.subplots(2,2,sharex=True,figsize=(10,7))
+    for eta in etas:
+        t,x,l=simulate_horizon(s,eta)
+        kpd,kdp=rates(x[:,2],eta)
+        ax[0,0].plot(t,kpd,linewidth=1.8,label="eta={}".format(eta))
+        ax[0,1].plot(t,kdp,linewidth=1.8,label="eta={}".format(eta))
+    for tau in taus:
+        t,x,l=simulate_horizon(s,mm.eta_memory,tau)
+        kpd,kdp=rates(x[:,2],mm.eta_memory)
+        ax[1,0].plot(t,kpd,linewidth=1.8,label="tau_m={}".format(tau))
+        ax[1,1].plot(t,kdp,linewidth=1.8,label="tau_m={}".format(tau))
+    ax[0,0].set_title("K_PD, varying eta (tau_m={})".format(mm.tau_m_memory))
+    ax[0,1].set_title("K_DP, varying eta (tau_m={})".format(mm.tau_m_memory))
+    ax[1,0].set_title("K_PD, varying tau_m (eta={})".format(mm.eta_memory))
+    ax[1,1].set_title("K_DP, varying tau_m (eta={})".format(mm.eta_memory))
+    for axi in ax.flat:
+        axi.legend(fontsize="small")
+    ax[1,0].set_xlabel("Time")
+    ax[1,1].set_xlabel("Time")
+    ax[1,0].set_xlim(0,Tmax)
+    fig.suptitle("Transition rates, horizon {:.0f}".format(Tmax))
+    fig.tight_layout()
+    fig.savefig(os.path.join(outdir,"memory_rates_T{:.0f}.png".format(Tmax)),dpi=150)
+    plt.close(fig)
+
+    # 2) xD, xP and m superposed, one line style per eta
+    fig,ax=plt.subplots(1,1,figsize=(8,5))
+    for eta,style in zip(etas,["-","--",":"]):
+        t,x,l=simulate_horizon(s,eta)
+        ax.plot(t,x[:,0],style,linewidth=1.8,color=mm.color_d,label="xD eta={}".format(eta))
+        ax.plot(t,x[:,1],style,linewidth=1.8,color=mm.color_rp,label="xP eta={}".format(eta))
+        ax.plot(t,x[:,2],style,linewidth=1.8,color=mm.color_m,label="m eta={}".format(eta))
+    ax.set_xlabel("Time")
+    ax.set_xlim(0,Tmax)
+    ax.legend(fontsize="small")
+    fig.suptitle("xD, xP, m superimposed, horizon {:.0f}".format(Tmax))
+    fig.tight_layout()
+    fig.savefig(os.path.join(outdir,"memory_xdxpm_T{:.0f}.png".format(Tmax)),dpi=150)
+    plt.close(fig)
+
+    # 3) m(t) for eta=0.5 with lh=1 and lh=0.5
+    fig,ax=plt.subplots(1,1,figsize=(8,5))
+    for lh_val,style in [(1.0,"-"),(0.5,"--")]:
+        t,x,l=simulate_horizon(s,mm.eta_memory,mm.tau_m_memory,lh=lh_val)
+        ax.plot(t,x[:,2],style,linewidth=1.8,color=mm.color_m,label="m, lh={}".format(lh_val))
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Memory m(t)")
+    ax.set_xlim(0,Tmax)
+    ax.legend(fontsize="small")
+    fig.suptitle("m(t), eta={}, horizon {:.0f}".format(mm.eta_memory,Tmax))
+    fig.tight_layout()
+    fig.savefig(os.path.join(outdir,"memory_m_lh_T{:.0f}.png".format(Tmax)),dpi=150)
+    plt.close(fig)
